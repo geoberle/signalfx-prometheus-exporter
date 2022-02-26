@@ -1,0 +1,16 @@
+flows:
+- name: raw-catchpoint
+  query: |
+    data('catchpoint.*').sum(by=['sf_metric', 'cp_testname']).publish()
+    data('catchpoint.*').sum(by=['sf_metric', 'cp_testname']).sum(over='5m').publish(label='5m')
+  selector:
+    matchExpressions:
+    - key: sf_metric
+      operator: In
+      values:
+      - catchpoint.counterfailedrequests
+      - catchpoint.counterrequests
+  prometheusMetric:
+    name: "{{sf_metric}}"
+    labels:
+      probe: "{{cp_testname}}"
