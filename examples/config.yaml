@@ -1,5 +1,8 @@
 flows:
 - name: raw-catchpoint
+  sfx:
+    realm: us1
+    token: xxx
   query: |
     data('catchpoint.*').sum(by=['sf_metric', 'cp_testname']).publish()
     data('catchpoint.*').sum(by=['sf_metric', 'cp_testname']).sum(over='5m').publish(label='5m')
@@ -11,6 +14,6 @@ flows:
       - catchpoint.counterfailedrequests
       - catchpoint.counterrequests
   prometheusMetric:
-    name: "{{sf_metric}}"
+    name: "{{ .OriginatingMetric }}"
     labels:
-      probe: "{{cp_testname}}"
+      probe: '{{ .CustomProperties.cp_testname }}'

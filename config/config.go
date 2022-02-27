@@ -7,8 +7,17 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type PrometheusMetric struct {
+	Name   string            `yaml:"name"`
+	Labels map[string]string `yaml:"labels"`
+}
+
 type FlowProgram struct {
-	Name     string `yaml:"name"`
+	Name string `yaml:"name"`
+	Sfx  struct {
+		Realm string `yaml:"realm"`
+		Token string `yaml:"token"`
+	} `yaml:"sfx"`
 	Query    string `yaml:"query"`
 	Selector struct {
 		MatchExpressions []struct {
@@ -17,10 +26,7 @@ type FlowProgram struct {
 			Values   []string `yaml:"values"`
 		} `yaml:"matchExpressions"`
 	} `yaml:"selector"`
-	PrometheusMetric struct {
-		Name   string            `yaml:"name"`
-		Labels map[string]string `yaml:"labels"`
-	} `yaml:"prometheusMetric"`
+	Metric PrometheusMetric `yaml:"prometheusMetric"`
 }
 
 func LoadFlowPrograms(file string) ([]FlowProgram, error) {
