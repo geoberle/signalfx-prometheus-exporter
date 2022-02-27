@@ -1,31 +1,20 @@
-DIR := ${CURDIR}
+.PHONY: test build-test-container build push gotest gobuild
 
-# Image URL to use all building/pushing image targets
-IMG ?= signalfx-prometheus-exporter
+IMAGE_NAME := quay.io/goberlec/signalfx-prometheus-exporter
+IMAGE_TAG := $(shell git rev-parse --short=7 HEAD)
+DOCKER_CONF := $(CURDIR)/.docker
+GOOS := $(shell go env GOOS)
 
-# Runtime CLI to use for building and pushing images
-RUNTIME ?= docker
+gotest:
+	CGO_ENABLED=0 GOOS=$(GOOS) go test ./...
 
-GO_GCFLAGS ?= -gcflags=all='-N -l'
-GO=GO111MODULE=on GOFLAGS=-mod=vendor go
-GO_BUILD_RECIPE=CGO_ENABLED=0 $(GO) build $(GO_GCFLAGS)
+gobuild: gotest
+	CGO_ENABLED=0 GOOS=$(GOOS) go build -o signalfx-prometheus-exporter -a -installsuffix cgo main.go
 
-OUT_DIR ?= bin
+build:
+	@docker build --no-cache -t $(IMAGE_NAME):$(IMAGE_TAG) .
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
-
-all: build
-
-build: signalfx-prometheus-exporter
-
-.PHONY: signalfx-prometheus-exporter
-signalfx-prometheus-exporter:
-	$(GO_BUILD_RECIPE) -o $(OUT_DIR)/signalfx-prometheus-exporter main.go
-
-run:
-	$(GO) run main.go
+push:
+	@docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest
+	@docker --config=$(DOCKER_CONF) push $(IMAGE_NAME):$(IMAGE_TAG)
+	@docker --config=$(DOCKER_CONF) push $(IMAGE_NAME):latest
