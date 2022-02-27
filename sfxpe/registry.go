@@ -1,14 +1,15 @@
 package sfxpe
 
 import (
+	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
 
 type FilteringRegistry struct {
-	Registry   prometheus.Gatherer
-	LabelName  string
-	LabelValue string
+	Registry       prometheus.Gatherer
+	VectorSelector string
 }
 
 func (fr *FilteringRegistry) Gather() ([]*dto.MetricFamily, error) {
@@ -22,7 +23,8 @@ func (fr *FilteringRegistry) Gather() ([]*dto.MetricFamily, error) {
 		metrics := []*dto.Metric{}
 		for _, m := range mf.GetMetric() {
 			for _, l := range m.GetLabel() {
-				if *l.Name == fr.LabelName && *l.Value == fr.LabelValue {
+				labelString := fmt.Sprintf("{%s=\"%s\"}", *l.Name, *l.Value)
+				if labelString == fr.VectorSelector {
 					metrics = append(metrics, m)
 					break
 				}
