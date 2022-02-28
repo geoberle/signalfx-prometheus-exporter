@@ -16,13 +16,16 @@ import (
 	"github.com/signalfx/signalfx-go/signalflow"
 	"github.com/signalfx/signalfx-go/signalflow/messages"
 	"github.com/spf13/cobra"
+
+	"golang.org/x/sync/errgroup"
 )
 
 var (
 	listenPort  int
 	configFile  string
-	sfxRegistry *prometheus.Registry
-	sfxGauges   map[string]*prometheus.GaugeVec
+	sfxRegistry = prometheus.NewRegistry()
+	sfxCounters = make(map[string]*prometheus.CounterVec)
+	sfxGauges   = make(map[string]*prometheus.GaugeVec)
 )
 
 var serveCmd = &cobra.Command{
@@ -36,12 +39,16 @@ var serveCmd = &cobra.Command{
 		}
 
 		// start streaming data from signalfx
-		sfxRegistry = prometheus.NewRegistry()
-		sfxGauges = make(map[string]*prometheus.GaugeVec)
-		for _, fp := range cfg.Flows {
-			go func(fp config.FlowProgram) {
-				streamData(cfg.Sfx, fp)
-			}(fp)
+		errs, ctx := errgroup.WithContext(cmd.Context())
+		for i := range cfg.Flows {
+			fp := cfg.Flows[i]
+			errs.Go(func() error {
+				err := streamData(cfg.Sfx, fp)
+				if err != nil {
+					log.Fatalf("Flow %s failed because of %+s", fp.Name, err)
+				}
+				return err
+			})
 		}
 
 		// start http server
@@ -55,7 +62,7 @@ var serveCmd = &cobra.Command{
 		}()
 		log.Printf("Listening on port %v\n", listenPort)
 
-		<-cmd.Context().Done()
+		<-ctx.Done()
 
 		log.Printf("Server stopped")
 
@@ -73,8 +80,7 @@ var serveCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serveCmd)
 	serveCmd.Flags().IntVarP(&listenPort, "port", "p", 1236, "listen port for incoming scrape requests")
-	serveCmd.Flags().StringVarP(&configFile, "config", "c", "", "flow config file")
-
+	serveCmd.Flags().StringVarP(&configFile, "config", "c", "/config/config.yml", "flow config file")
 }
 
 func probeHandler(w http.ResponseWriter, r *http.Request) {
@@ -97,15 +103,21 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) {
-	client, _ := signalflow.NewClient(
+func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
+	client, err := signalflow.NewClient(
 		signalflow.StreamURLForRealm(sfx.Realm),
 		signalflow.AccessToken(sfx.Token),
 	)
+	if err != nil {
+		return fmt.Errorf("Error connecting to SignalFX realm %s - %+s", sfx.Realm, err)
+	}
 
-	comp, _ := client.Execute(&signalflow.ExecuteRequest{
+	comp, err := client.Execute(&signalflow.ExecuteRequest{
 		Program: fp.Query,
 	})
+	if err != nil {
+		return fmt.Errorf("SignalFlow program for %s is invalid - %+s", fp.Name, err)
+	}
 
 	for msg := range comp.Data() {
 		if len(msg.Payloads) == 0 {
@@ -113,32 +125,53 @@ func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) {
 		}
 		for _, pl := range msg.Payloads {
 			meta := comp.TSIDMetadata(pl.TSID)
-			gauge, err := getGauge(fp.Metric, meta)
+			streamLabel, ok := meta.InternalProperties["sf_streamLabel"].(string)
+			if !ok {
+				streamLabel = "default"
+			}
+			mt, err := fp.GetMetricTemplateForStream(streamLabel)
 			if err != nil {
-				// todo log
-			} else {
-				gauge.Set(pl.Float64())
+				// todo log and inc error for stream
+				continue
+			}
+
+			if mt.Type == "gauge" {
+				gauge, err := getGauge(mt, meta)
+				if err != nil {
+					// todo log
+				} else {
+					gauge.Set(pl.Float64())
+				}
+			} else if mt.Type == "counter" {
+				counter, err := getCounter(mt, meta)
+				if err != nil {
+					// todo log
+				} else {
+					counter.Add(pl.Float64())
+				}
 			}
 		}
 	}
+	err = comp.Err()
+	return err
 }
 
-func getGauge(metric *config.PrometheusMetric, sfxMeta *messages.MetadataProperties) (prometheus.Gauge, error) {
+func buildPrometheusMetadata(metric config.PrometheusMetric, sfxMeta *messages.MetadataProperties) (string, []string, []string, error) {
 	// data for template rendering
 	safeMetricName := strings.ReplaceAll(sfxMeta.OriginatingMetric, ".", "_")
 	safeMetricName = strings.ReplaceAll(safeMetricName, ":", "_")
 	tmplRenderingVars := struct {
 		SignalFxMetricName string
-		Meta               *messages.MetadataProperties
+		SignalFxLabels     map[string]string
 	}{
 		SignalFxMetricName: safeMetricName,
-		Meta:               sfxMeta,
+		SignalFxLabels:     sfxMeta.CustomProperties,
 	}
 
 	// build name
 	name, err := metric.GetMetricName(tmplRenderingVars)
 	if err != nil {
-		return nil, err
+		return "", nil, nil, err
 	}
 
 	// build labels
@@ -149,10 +182,19 @@ func getGauge(metric *config.PrometheusMetric, sfxMeta *messages.MetadataPropert
 		labelNames[i] = name
 		value, err := metric.GetLabelValue(name, tmplRenderingVars)
 		if err != nil {
-			return nil, err
+			return "", nil, nil, err
 		}
 		labelValues[i] = value
 		i++
+	}
+
+	return name, labelNames, labelValues, nil
+}
+
+func getGauge(metric config.PrometheusMetric, sfxMeta *messages.MetadataProperties) (prometheus.Gauge, error) {
+	name, labelNames, labelValues, err := buildPrometheusMetadata(metric, sfxMeta)
+	if err != nil {
+		return nil, nil
 	}
 
 	// build  or reuse gauge
@@ -165,4 +207,22 @@ func getGauge(metric *config.PrometheusMetric, sfxMeta *messages.MetadataPropert
 		sfxRegistry.MustRegister(g)
 	}
 	return g.WithLabelValues(labelValues...), nil
+}
+
+func getCounter(metric config.PrometheusMetric, sfxMeta *messages.MetadataProperties) (prometheus.Counter, error) {
+	name, labelNames, labelValues, err := buildPrometheusMetadata(metric, sfxMeta)
+	if err != nil {
+		return nil, nil
+	}
+
+	// build  or reuse gauge
+	c, ok := sfxCounters[name]
+	if !ok {
+		c = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: name,
+		}, labelNames)
+		sfxCounters[name] = c
+		sfxRegistry.MustRegister(c)
+	}
+	return c.WithLabelValues(labelValues...), nil
 }

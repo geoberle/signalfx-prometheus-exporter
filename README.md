@@ -22,16 +22,19 @@ sfx:
   realm: us1
   token: $token
 flows:
-- name: raw-catchpoint-metrics
+- name: catchpoint-metrics
   query: |
-    data('catchpoint.*').publish()
-  prometheusMetricTemplate:
-    name: "{{ .SignalFxMetricName }}"
+    data('catchpoint.counterfailedrequests').publish(prometheus_name="catchpoint_failures_total")
+  prometheusMetricTemplates:
+  - name: "{{ .SignalFxLabels.prometheus_name }}"
+    type: counter
     labels:
-      probe: '{{ .Meta.CustomProperties.cp_testname }}'
+      probe: '{{ .SignalFxLabels.cp_testname }}'
 ```
 
 The exporter process needs to be restarted for configuration changes to become effective.
+
+Have a look at the [examples directory](/examples) for inspiration.
 
 ## Running this software
 SignalFX Prometheus Exporter is available as container image.
@@ -58,3 +61,4 @@ Since the data delivery mechanism from SignalFX is a stream of metrics, the proc
 ## Known issues
 - no data during warmup phase
 - self observability missing (e.g. nr of received events)
+  - log based on stream tag

@@ -12,27 +12,33 @@ import (
 
 type PrometheusMetric struct {
 	Name           string            `yaml:"name"`
+	Stream         string            `yaml:"stream"`
+	Type           string            `yaml:"type"`
 	Labels         map[string]string `yaml:"labels"`
-	nameTemplate   *template.Template
-	labelTemplates map[string]*template.Template
+	nameTemplate   template.Template
+	labelTemplates map[string]template.Template
 }
 
 func (pm *PrometheusMetric) Validate() error {
 	// name template
-	tmpl, err := template.New("x").Parse(pm.Name)
+	name := pm.Name
+	if name == "" {
+		name = "{{ .SignalFxMetricName }}"
+	}
+	tmpl, err := template.New("x").Parse(name)
 	if err != nil {
 		return err
 	}
-	pm.nameTemplate = tmpl
+	pm.nameTemplate = *tmpl
 
 	// label templates
-	labelTemplates := map[string]*template.Template{}
+	labelTemplates := map[string]template.Template{}
 	for labelName, labelValue := range pm.Labels {
 		tmpl, err := template.New("x").Parse(labelValue)
 		if err != nil {
 			return err
 		}
-		labelTemplates[labelName] = tmpl
+		labelTemplates[labelName] = *tmpl
 	}
 	pm.labelTemplates = labelTemplates
 
@@ -56,20 +62,39 @@ func (pm *PrometheusMetric) GetLabelValue(labelName string, data interface{}) (s
 }
 
 type FlowProgram struct {
-	Name     string `yaml:"name"`
-	Query    string `yaml:"query"`
-	Selector struct {
-		MatchExpressions []struct {
-			Key      string   `yaml:"key"`
-			Operator string   `yaml:"operator"`
-			Values   []string `yaml:"values"`
-		} `yaml:"matchExpressions"`
-	} `yaml:"selector"`
-	Metric *PrometheusMetric `yaml:"prometheusMetricTemplate"`
+	Name              string             `yaml:"name"`
+	Query             string             `yaml:"query"`
+	MetricTemplates   []PrometheusMetric `yaml:"prometheusMetricTemplates"`
+	templatesByStream map[string]PrometheusMetric
+}
+
+func (fp *FlowProgram) GetMetricTemplateForStream(stream string) (PrometheusMetric, error) {
+	mt, ok := fp.templatesByStream[stream]
+	if !ok {
+		return PrometheusMetric{}, fmt.Errorf("No metric template found for stream %s", stream)
+	}
+	return mt, nil
 }
 
 func (fp *FlowProgram) Validate() error {
-	return fp.Metric.Validate()
+	defaultStreamFound := false
+	fp.templatesByStream = make(map[string]PrometheusMetric)
+	for i := range fp.MetricTemplates {
+		mtp := &fp.MetricTemplates[i]
+		if err := mtp.Validate(); err != nil {
+			return err
+		}
+		if mtp.Stream == "" {
+			mtp.Stream = "default"
+		}
+		if mtp.Stream == "default" && defaultStreamFound {
+			return fmt.Errorf("More than one default stream found in flow %s", fp.Name)
+		} else if mtp.Stream == "default" {
+			defaultStreamFound = true
+		}
+		fp.templatesByStream[mtp.Stream] = *mtp
+	}
+	return nil
 }
 
 type SignalFxConfig struct {
@@ -90,7 +115,8 @@ func (c *Config) Validate() error {
 	if err := c.Sfx.Validate(); err != nil {
 		return err
 	}
-	for _, fp := range c.Flows {
+	for i := range c.Flows {
+		fp := &c.Flows[i]
 		if err := fp.Validate(); err != nil {
 			return err
 		}
