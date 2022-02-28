@@ -60,7 +60,7 @@ type FlowProgram struct {
 	Sfx  struct {
 		Realm string `yaml:"realm"`
 		Token string `yaml:"token"`
-	} `yaml:"sfx"`
+	} `yaml:"sfxAuthentication"`
 	Query    string `yaml:"query"`
 	Selector struct {
 		MatchExpressions []struct {
@@ -69,7 +69,7 @@ type FlowProgram struct {
 			Values   []string `yaml:"values"`
 		} `yaml:"matchExpressions"`
 	} `yaml:"selector"`
-	Metric *PrometheusMetric `yaml:"prometheusMetric"`
+	Metric *PrometheusMetric `yaml:"prometheusMetricTemplate"`
 }
 
 func (fp *FlowProgram) Validate() error {
