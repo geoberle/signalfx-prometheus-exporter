@@ -19,10 +19,10 @@ import (
 )
 
 var (
-	listenPort int
-	configFile string
-	registry   *prometheus.Registry
-	gauges     map[string]*prometheus.GaugeVec
+	listenPort  int
+	configFile  string
+	sfxRegistry *prometheus.Registry
+	sfxGauges   map[string]*prometheus.GaugeVec
 )
 
 var serveCmd = &cobra.Command{
@@ -35,19 +35,19 @@ var serveCmd = &cobra.Command{
 			return
 		}
 
-		mux := http.NewServeMux()
-		mux.HandleFunc("/probe", probeHandler)
-		server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
-
-		registry = prometheus.NewRegistry()
-		gauges = make(map[string]*prometheus.GaugeVec)
-
+		// sfx data
+		sfxRegistry = prometheus.NewRegistry()
+		sfxGauges = make(map[string]*prometheus.GaugeVec)
 		for _, fp := range flowPrograms {
 			go func(fp config.FlowProgram) {
 				streamData(fp)
 			}(fp)
 		}
 
+		// server
+		mux := http.NewServeMux()
+		mux.HandleFunc("/probe", probeHandler)
+		server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
 		go func() {
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("listen:%+s\n", err)
@@ -86,11 +86,11 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 	matchQueries, ok := r.URL.Query()["match"]
 	if ok && len(matchQueries) > 0 {
 		metricGatherer = &sfxpe.FilteringRegistry{
-			Registry:       registry,
+			Registry:       sfxRegistry,
 			VectorSelector: matchQueries[0],
 		}
 	} else {
-		metricGatherer = registry
+		metricGatherer = sfxRegistry
 	}
 
 	h := promhttp.HandlerFor(metricGatherer, promhttp.HandlerOpts{})
@@ -146,13 +146,13 @@ func getGauge(metric *config.PrometheusMetric, sfxMeta *messages.MetadataPropert
 	}
 
 	// build  or reuse gauge
-	g, ok := gauges[name]
+	g, ok := sfxGauges[name]
 	if !ok {
 		g = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: name,
 		}, labelNames)
-		gauges[name] = g
-		registry.MustRegister(g)
+		sfxGauges[name] = g
+		sfxRegistry.MustRegister(g)
 	}
 	return g.WithLabelValues(labelValues...), nil
 }
