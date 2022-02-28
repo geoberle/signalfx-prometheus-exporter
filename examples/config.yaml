@@ -1,6 +1,6 @@
 flows:
 - name: raw-catchpoint
-  sfx:
+  sfxAuthentication:
     realm: us1
     token: xxx
   query: |
@@ -13,7 +13,7 @@ flows:
       values:
       - catchpoint.counterfailedrequests
       - catchpoint.counterrequests
-  prometheusMetric:
+  prometheusMetricTemplate:
     name: "{{ .OriginatingMetric }}"
     labels:
       probe: '{{ .CustomProperties.cp_testname }}'
