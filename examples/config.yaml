@@ -1,19 +1,22 @@
+sfx:
+  realm: us1
+  token: xxx
 flows:
-- name: raw-catchpoint
-  sfxAuthentication:
-    realm: us1
-    token: xxx
+- name: catchpoint-data
   query: |
-    data('catchpoint.*').sum(by=['sf_metric', 'cp_testname']).publish()
-    data('catchpoint.*').sum(by=['sf_metric', 'cp_testname']).sum(over='5m').publish(label='5m')
-  selector:
-    matchExpressions:
-    - key: sf_metric
-      operator: In
-      values:
-      - catchpoint.counterfailedrequests
-      - catchpoint.counterrequests
+    data('catchpoint.counterrequests').publish()
+    data('catchpoint.counterfailedrequests').publish()
+    data('catchpoint.total.time').publish()
   prometheusMetricTemplate:
-    name: "{{ .OriginatingMetric }}"
+    name: "{{ .SignalFxMetricName }}"
     labels:
-      probe: '{{ .CustomProperties.cp_testname }}'
+      probe: '{{ .Meta.CustomProperties.cp_testname }}'
+- name: catchpoint-data-5m
+  query: |
+    data('catchpoint.counterrequests').sum(by=['sf_metric', 'cp_testname']).sum(over='5m').publish()
+    data('catchpoint.counterfailedrequests').sum(by=['sf_metric', 'cp_testname']).sum(over='5m').publish()
+    data('catchpoint.total.time').median(by=['sf_metric', 'cp_testname']).median(over='5m').publish()
+  prometheusMetricTemplate:
+    name: "{{ .SignalFxMetricName }}:5m"
+    labels:
+      probe: '{{ .Meta.CustomProperties.cp_testname }}'

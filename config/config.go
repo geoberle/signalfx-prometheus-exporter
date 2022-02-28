@@ -56,11 +56,7 @@ func (pm *PrometheusMetric) GetLabelValue(labelName string, data interface{}) (s
 }
 
 type FlowProgram struct {
-	Name string `yaml:"name"`
-	Sfx  struct {
-		Realm string `yaml:"realm"`
-		Token string `yaml:"token"`
-	} `yaml:"sfxAuthentication"`
+	Name     string `yaml:"name"`
 	Query    string `yaml:"query"`
 	Selector struct {
 		MatchExpressions []struct {
@@ -76,27 +72,46 @@ func (fp *FlowProgram) Validate() error {
 	return fp.Metric.Validate()
 }
 
-func LoadFlowPrograms(file string) ([]FlowProgram, error) {
+type SignalFxConfig struct {
+	Realm string `yaml:"realm"`
+	Token string `yaml:"token"`
+}
+
+func (sfx *SignalFxConfig) Validate() error {
+	return nil
+}
+
+type Config struct {
+	Sfx   SignalFxConfig `yaml:"sfx"`
+	Flows []FlowProgram  `yaml:"flows"`
+}
+
+func (c *Config) Validate() error {
+	if err := c.Sfx.Validate(); err != nil {
+		return err
+	}
+	for _, fp := range c.Flows {
+		if err := fp.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func LoadConfig(file string) (*Config, error) {
 	yamlFile, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Printf("yamlFile.Get err   #%v ", err)
 		return nil, err
 	}
 
-	flowProgramList := struct {
-		Flows []FlowProgram `yaml:"flows"`
-	}{}
-	err = yaml.Unmarshal(yamlFile, &flowProgramList)
+	var cfg Config
+	err = yaml.Unmarshal(yamlFile, &cfg)
 	if err != nil {
 		log.Fatalf("Unmarshal: %v", err)
 		return nil, err
 	}
 
-	for _, fp := range flowProgramList.Flows {
-		if err := fp.Validate(); err != nil {
-			return nil, err
-		}
-	}
-
-	return flowProgramList.Flows, nil
+	cfg.Validate()
+	return &cfg, nil
 }

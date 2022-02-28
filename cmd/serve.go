@@ -29,22 +29,22 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Listen for signalfx scrape requests",
 	Run: func(cmd *cobra.Command, args []string) {
-		flowPrograms, err := config.LoadFlowPrograms(configFile)
+		cfg, err := config.LoadConfig(configFile)
 		if err != nil {
 			log.Fatalf("failed to load config: %+s", err)
 			return
 		}
 
-		// sfx data
+		// start streaming data from signalfx
 		sfxRegistry = prometheus.NewRegistry()
 		sfxGauges = make(map[string]*prometheus.GaugeVec)
-		for _, fp := range flowPrograms {
+		for _, fp := range cfg.Flows {
 			go func(fp config.FlowProgram) {
-				streamData(fp)
+				streamData(cfg.Sfx, fp)
 			}(fp)
 		}
 
-		// server
+		// start http server
 		mux := http.NewServeMux()
 		mux.HandleFunc("/probe", probeHandler)
 		server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
@@ -97,10 +97,10 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-func streamData(fp config.FlowProgram) {
+func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) {
 	client, _ := signalflow.NewClient(
-		signalflow.StreamURLForRealm(fp.Sfx.Realm),
-		signalflow.AccessToken(fp.Sfx.Token),
+		signalflow.StreamURLForRealm(sfx.Realm),
+		signalflow.AccessToken(sfx.Token),
 	)
 
 	comp, _ := client.Execute(&signalflow.ExecuteRequest{
@@ -124,12 +124,22 @@ func streamData(fp config.FlowProgram) {
 }
 
 func getGauge(metric *config.PrometheusMetric, sfxMeta *messages.MetadataProperties) (prometheus.Gauge, error) {
+	// data for template rendering
+	safeMetricName := strings.ReplaceAll(sfxMeta.OriginatingMetric, ".", "_")
+	safeMetricName = strings.ReplaceAll(safeMetricName, ":", "_")
+	tmplRenderingVars := struct {
+		SignalFxMetricName string
+		Meta               *messages.MetadataProperties
+	}{
+		SignalFxMetricName: safeMetricName,
+		Meta:               sfxMeta,
+	}
+
 	// build name
-	name, err := metric.GetMetricName(sfxMeta)
+	name, err := metric.GetMetricName(tmplRenderingVars)
 	if err != nil {
 		return nil, err
 	}
-	name = strings.ReplaceAll(name, ".", "_")
 
 	// build labels
 	labelNames := make([]string, len(metric.Labels))
@@ -137,7 +147,7 @@ func getGauge(metric *config.PrometheusMetric, sfxMeta *messages.MetadataPropert
 	var i = 0
 	for name := range metric.Labels {
 		labelNames[i] = name
-		value, err := metric.GetLabelValue(name, sfxMeta)
+		value, err := metric.GetLabelValue(name, tmplRenderingVars)
 		if err != nil {
 			return nil, err
 		}
