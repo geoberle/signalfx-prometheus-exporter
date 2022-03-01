@@ -9,7 +9,7 @@ It leverages the [SignalFlow](https://dev.splunk.com/observability/docs/signalfl
 SignalFX Prometheus exporter can be used to bring Splunk Observability Cloud data into existing Prometheus environments, allowing common dashboarding and alerting rules to be applied.
 
 ## Configuration
-SignalFX Prometheus exporter is configured via a configuration file and command-line flags.
+SignalFX Prometheus exporter is configured via a [configuration file](docs/configuration.md) and commandline flags.
 
 The configuration file declares how data is read from SignalFX and how it is processed into scrapable Prometheus metrics.
 
