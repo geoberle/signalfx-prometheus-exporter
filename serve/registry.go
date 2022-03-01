@@ -1,4 +1,4 @@
-package sfxpe
+package serve
 
 import (
 	"fmt"
