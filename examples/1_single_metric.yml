@@ -1,0 +1,18 @@
+# Export a single SignalFX metric and translate it to a Prometheus metric named
+# catchpoint_failures_total{probe="abc"}
+#
+# The label `prometheus_name` added in the publish command of the query is used
+# to populate the Prometheus metric name. Additionally the SignalFX metric is
+# expected to have a label called `cp_testname`, which is translated to a
+# Prometheus label named `probe`
+sfx:
+  token: xxx
+flows:
+- name: catchpoint-metrics
+  query: |
+    data('catchpoint.counterfailedrequests').publish(prometheus_name="catchpoint_failures_total")
+  prometheusMetricTemplates:
+  - name: "{{ .SignalFxLabels.prometheus_name }}"
+    type: counter
+    labels:
+      probe: '{{ .SignalFxLabels.cp_testname }}'

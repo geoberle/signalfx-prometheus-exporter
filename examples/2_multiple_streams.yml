@@ -1,28 +1,30 @@
+# Query two metrics and process them with individual metric templates.
+#
+# The first data stream is published into the stream `gauge`, which gets processed
+# by the metric template with the stream field `gauge`. Additionally, the
+# published `prometheus_name` label is used to build the Prometheus metric name
+# `catchpoint_failures_total:24h`.
+#
+# The second data stream does not explicitely publish to a stream. Those metrics
+# will be processed by a metric template with no stream field or with the stream
+# field `default`. This template does not declare any specific name for the
+# Prometheus metric, therefore it defaults to the SignalFX metric name
+# `catchpoint_counterrequests` (invalid characters are replaced by underscore).
 sfx:
-  realm: us1
   token: xxx
 flows:
 - name: catchpoint-data
   query: |
-    # the publish command specifies the `gauge` stream, so Prometheus metric
-    # creation from the frist metric template is applied
     data('catchpoint.counterfailedrequests'). \
         sum(by=['sf_metric', 'cp_testname']).sum(over='24h'). \
         publish("gauge", prometheus_name="catchpoint_failures_total:24h")
-    # the publish command does not mention a stream label so the default metric
-    # template is used for these metrics
     data('catchpoint.counterrequests').publish()
   prometheusMetricTemplates:
-  # metrics from the `gauge` stream are considered gauges and get their name from
-  # the `prometheus_name` label added by the publish command in the query section
   - stream: gauge
     type: gauge
     name: "{{ .SignalFxLabels.prometheus_name }}"
     labels:
       probe: '{{ .SignalFxLabels.cp_testname }}'
-  # metrics without a stream defined in the publish command are processed by this
-  # default metric template. also the `name` is missing so the SignalFX metric name
-  # is used as Prometheus name
   - type: counter
     labels:
       probe: '{{ .SignalFxLabels.cp_testname }}'
