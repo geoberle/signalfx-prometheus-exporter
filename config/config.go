@@ -103,6 +103,9 @@ type SignalFxConfig struct {
 }
 
 func (sfx *SignalFxConfig) Validate() error {
+	if sfx.Realm == "" {
+		sfx.Realm = "us1"
+	}
 	return nil
 }
 
