@@ -40,10 +40,12 @@ Have a look at the [examples directory](/examples) for inspiration.
 SignalFX Prometheus Exporter is available as container image.
 
 ```bash
-docker run -d --rm -p 1236:1236 --name sfxpe -v `pwd`:/config quay.io/goberlec/signalfx-prometheus-exporter:latest serve --config /config/config.yaml
+docker run -d --rm -p 9091:9091 --name sfxpe -v `pwd`:/config quay.io/goberlec/signalfx-prometheus-exporter:latest serve --config /config/config.yaml
 ```
 
-Visiting [http://localhost:1236/probe](http://localhost:1236/probe) will show the metrics as defined in the configuration file.
+Visiting [http://localhost:9091/probe](http://localhost:9091/probe) will show the metrics as defined in the configuration file.
+
+Observability metrics for the exporter itself are available on http://localhost:9090/metrics
 
 ## Architecture
 SignalFX Prometheus exporter bridges the gap between the stream based data extraction from SignalFX and the pull based data collection approach of Prometheus.
@@ -60,5 +62,4 @@ Since the data delivery mechanism from SignalFX is a stream of metrics, the proc
 
 ## Known issues
 - no data during warmup phase
-- self observability missing (e.g. nr of received events)
-  - log based on stream tag
+- verify query - publish() must exists at least once
