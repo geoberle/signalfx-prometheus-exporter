@@ -21,11 +21,19 @@ import (
 )
 
 var (
-	listenPort  int
-	configFile  string
+	// cli flags
+	listenPort        int
+	observabilityPort int
+	configFile        string
+
+	// sfx metrics state
 	sfxRegistry = prometheus.NewRegistry()
 	sfxCounters = make(map[string]*prometheus.CounterVec)
 	sfxGauges   = make(map[string]*prometheus.GaugeVec)
+
+	// self observability
+	flowMetricsReceived *prometheus.CounterVec
+	flowMetricsFailed   *prometheus.CounterVec
 )
 
 var serveCmd = &cobra.Command{
@@ -51,13 +59,34 @@ var serveCmd = &cobra.Command{
 			})
 		}
 
+		// start observability server
+		flowMetricsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "sfxpe_flow_metrics_received_total",
+			Help: "Number of received metrics",
+		}, []string{"flow", "stream"})
+		flowMetricsFailed = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "sfxpe_flow_metrics_failed",
+			Help: "Number of metrics that failed do process",
+		}, []string{"flow", "stream"})
+		prometheus.MustRegister(flowMetricsReceived)
+		prometheus.MustRegister(flowMetricsFailed)
+		obsMux := http.NewServeMux()
+		obsMux.Handle("/metrics", promhttp.Handler())
+		obsServer := &http.Server{Addr: fmt.Sprintf(":%v", observabilityPort), Handler: obsMux}
+		go func() {
+			if err := obsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("observability server failure: %+s\n", err)
+			}
+		}()
+		log.Printf("observability server listening on port %v\n", observabilityPort)
+
 		// start http server
 		mux := http.NewServeMux()
 		mux.HandleFunc("/probe", probeHandler)
 		server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
 		go func() {
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("listen:%+s\n", err)
+				log.Fatalf("metrics server failure: %+s\n", err)
 			}
 		}()
 		log.Printf("Listening on port %v\n", listenPort)
@@ -79,8 +108,9 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
-	serveCmd.Flags().IntVarP(&listenPort, "port", "p", 1236, "listen port for incoming scrape requests")
+	serveCmd.Flags().IntVarP(&listenPort, "port", "l", 9091, "listen port for incoming scrape requests")
 	serveCmd.Flags().StringVarP(&configFile, "config", "c", "/config/config.yml", "flow config file")
+	serveCmd.Flags().IntVarP(&observabilityPort, "observability-port", "p", 9090, "port for expoerter self observability")
 }
 
 func probeHandler(w http.ResponseWriter, r *http.Request) {
@@ -125,19 +155,22 @@ func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
 		}
 		for _, pl := range msg.Payloads {
 			meta := comp.TSIDMetadata(pl.TSID)
-			streamLabel, ok := meta.InternalProperties["sf_streamLabel"].(string)
+			stream, ok := meta.InternalProperties["sf_streamLabel"].(string)
 			if !ok {
-				streamLabel = "default"
+				stream = "default"
 			}
-			mt, err := fp.GetMetricTemplateForStream(streamLabel)
+			flowMetricsReceived.WithLabelValues(fp.Name, stream).Inc()
+			mt, err := fp.GetMetricTemplateForStream(stream)
 			if err != nil {
-				// todo log and inc error for stream
+				// todo log
+				flowMetricsFailed.WithLabelValues(fp.Name, stream).Inc()
 				continue
 			}
 
 			if mt.Type == "gauge" {
 				gauge, err := getGauge(mt, meta)
 				if err != nil {
+					flowMetricsFailed.WithLabelValues(fp.Name, stream).Inc()
 					// todo log
 				} else {
 					gauge.Set(pl.Float64())
@@ -145,6 +178,7 @@ func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
 			} else if mt.Type == "counter" {
 				counter, err := getCounter(mt, meta)
 				if err != nil {
+					flowMetricsFailed.WithLabelValues(fp.Name, stream).Inc()
 					// todo log
 				} else {
 					counter.Add(pl.Float64())
