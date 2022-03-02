@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const DefaultStream = "default"
+
 type PrometheusMetric struct {
 	Name           string            `yaml:"name"`
 	Stream         string            `yaml:"stream"`
@@ -85,11 +87,11 @@ func (fp *FlowProgram) Validate() error {
 			return err
 		}
 		if mtp.Stream == "" {
-			mtp.Stream = "default"
+			mtp.Stream = DefaultStream
 		}
-		if mtp.Stream == "default" && defaultStreamFound {
+		if mtp.Stream == DefaultStream && defaultStreamFound {
 			return fmt.Errorf("More than one default stream found in flow %s", fp.Name)
-		} else if mtp.Stream == "default" {
+		} else if mtp.Stream == DefaultStream {
 			defaultStreamFound = true
 		}
 		fp.templatesByStream[mtp.Stream] = *mtp

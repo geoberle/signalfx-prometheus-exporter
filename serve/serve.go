@@ -30,7 +30,7 @@ var (
 	flowMetricsFailed   *prometheus.CounterVec
 )
 
-func CollectoAndServe(configFile string, listenPort int, observabilityPort int, ctx context.Context) {
+func CollectoAndServe(ctx context.Context, configFile string, listenPort int, observabilityPort int) {
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
 		log.Fatalf("failed to load config: %+s", err)
@@ -187,7 +187,8 @@ func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
 	return err
 }
 
-func buildPrometheusMetadata(metric config.PrometheusMetric, sfxMeta *messages.MetadataProperties) (string, []string, []string, error) {
+func buildPrometheusMetadata(metric config.PrometheusMetric, sfxMeta *messages.MetadataProperties,
+) (string, []string, []string, error) {
 	// data for template rendering
 	safeMetricName := strings.ReplaceAll(sfxMeta.OriginatingMetric, ".", "_")
 	safeMetricName = strings.ReplaceAll(safeMetricName, ":", "_")
