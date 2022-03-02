@@ -10,6 +10,9 @@
 # field `default`. This template does not declare any specific name for the
 # Prometheus metric, therefore it defaults to the SignalFX metric name
 # `catchpoint_counterrequests` (invalid characters are replaced by underscore).
+#
+# Both data streams yield SignalFX metrics with the label `cp_testname`, which
+# is translated to a Prometheus label named `instance`
 sfx:
   token: xxx
 flows:
@@ -24,7 +27,7 @@ flows:
     type: gauge
     name: "{{ .SignalFxLabels.prometheus_name }}"
     labels:
-      probe: '{{ .SignalFxLabels.cp_testname }}'
+      instance: '{{ .SignalFxLabels.cp_testname }}'
   - type: counter
     labels:
-      probe: '{{ .SignalFxLabels.cp_testname }}'
+      instance: '{{ .SignalFxLabels.cp_testname }}'

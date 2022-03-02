@@ -1,15 +1,14 @@
 package serve
 
 import (
-	"fmt"
-
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
 
 type FilteringRegistry struct {
-	Registry       prometheus.Gatherer
-	VectorSelector string
+	Registry    prometheus.Gatherer
+	FilterLabel string
+	FilterValue string
 }
 
 func (fr *FilteringRegistry) Gather() ([]*dto.MetricFamily, error) {
@@ -23,8 +22,7 @@ func (fr *FilteringRegistry) Gather() ([]*dto.MetricFamily, error) {
 		metrics := []*dto.Metric{}
 		for _, m := range mf.GetMetric() {
 			for _, l := range m.GetLabel() {
-				labelString := fmt.Sprintf("{%s=\"%s\"}", *l.Name, *l.Value)
-				if labelString == fr.VectorSelector {
+				if *l.Name == fr.FilterLabel && *l.Value == fr.FilterValue {
 					metrics = append(metrics, m)
 					break
 				}

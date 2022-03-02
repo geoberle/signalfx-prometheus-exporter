@@ -10,6 +10,7 @@ import (
 
 	"signalfx-prometheus-exporter/config"
 
+	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/signalfx/signalfx-go/signalflow"
@@ -60,7 +61,7 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 	}, []string{"flow", "stream"})
 	prometheus.MustRegister(flowMetricsReceived)
 	prometheus.MustRegister(flowMetricsFailed)
-	obsMux := http.NewServeMux()
+	obsMux := mux.NewRouter()
 	obsMux.Handle("/metrics", promhttp.Handler())
 	obsServer := &http.Server{Addr: fmt.Sprintf(":%v", observabilityPort), Handler: obsMux}
 	go func() {
@@ -70,9 +71,10 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 	}()
 	log.Printf("Observability server listening on port %v\n", observabilityPort)
 
-	// start http server
-	mux := http.NewServeMux()
-	mux.HandleFunc("/probe", probeHandler)
+	// start probe server
+	mux := mux.NewRouter()
+	mux.HandleFunc("/metrics", metricsHandler)
+	mux.HandleFunc("/probe/{target}", probeHandler)
 	server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -96,22 +98,35 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 }
 
 func probeHandler(w http.ResponseWriter, r *http.Request) {
+	// blackbox exporter compatible scrape handler
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(5*float64(time.Second)))
 	defer cancel()
 	r = r.WithContext(ctx)
 
-	var metricGatherer prometheus.Gatherer
-	matchQueries, ok := r.URL.Query()["match"]
-	if ok && len(matchQueries) > 0 {
-		metricGatherer = &FilteringRegistry{
-			Registry:       sfxRegistry,
-			VectorSelector: matchQueries[0],
+	vars := mux.Vars(r)
+	targetLabel, ok := vars["target"]
+	if ok && targetLabel != "" {
+		targetValue, ok := r.URL.Query()["target"]
+		if ok && len(targetValue) > 0 {
+			metricGatherer := &FilteringRegistry{
+				Registry:    sfxRegistry,
+				FilterLabel: targetLabel,
+				FilterValue: targetValue[0],
+			}
+			h := promhttp.HandlerFor(metricGatherer, promhttp.HandlerOpts{})
+			h.ServeHTTP(w, r)
+			return
 		}
-	} else {
-		metricGatherer = sfxRegistry
 	}
+	w.WriteHeader(http.StatusBadRequest)
+}
 
-	h := promhttp.HandlerFor(metricGatherer, promhttp.HandlerOpts{})
+func metricsHandler(w http.ResponseWriter, r *http.Request) {
+	// renders all metrics
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(5*float64(time.Second)))
+	defer cancel()
+	r = r.WithContext(ctx)
+	h := promhttp.HandlerFor(sfxRegistry, promhttp.HandlerOpts{})
 	h.ServeHTTP(w, r)
 }
 

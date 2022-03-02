@@ -3,6 +3,7 @@ module signalfx-prometheus-exporter
 go 1.16
 
 require (
+	github.com/gorilla/mux v1.8.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/signalfx/signalfx-go v1.8.7
