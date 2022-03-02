@@ -2,7 +2,7 @@
 
 CONTAINER_ENGINE ?= $(shell which podman >/dev/null 2>&1 && echo podman || echo docker)
 
-IMAGE_NAME := quay.io/goberlec/signalfx-prometheus-exporter
+IMAGE_NAME := quay.io/app-sre/signalfx-prometheus-exporter
 IMAGE_TAG := $(shell git rev-parse --short=7 HEAD)
 
 ifneq (,$(wildcard $(CURDIR)/.docker))
