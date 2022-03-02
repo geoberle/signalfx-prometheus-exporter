@@ -1,8 +1,16 @@
-.PHONY: test build-test-container build push gotest gobuild
+.PHONY: build push gotest gobuild
+
+CONTAINER_ENGINE ?= $(shell which podman >/dev/null 2>&1 && echo podman || echo docker)
 
 IMAGE_NAME := quay.io/goberlec/signalfx-prometheus-exporter
 IMAGE_TAG := $(shell git rev-parse --short=7 HEAD)
-DOCKER_CONF := $(CURDIR)/.docker
+
+ifneq (,$(wildcard $(CURDIR)/.docker))
+	DOCKER_CONF := $(CURDIR)/.docker
+else
+	DOCKER_CONF := $(HOME)/.docker
+endif
+
 GOOS := $(shell go env GOOS)
 
 gotest:
@@ -12,9 +20,9 @@ gobuild: gotest
 	CGO_ENABLED=0 GOOS=$(GOOS) go build -o signalfx-prometheus-exporter -a -installsuffix cgo main.go
 
 build:
-	@docker build --no-cache -t $(IMAGE_NAME):$(IMAGE_TAG) .
+	@DOCKER_BUILDKIT=1 $(CONTAINER_ENGINE) build --no-cache -t $(IMAGE_NAME):latest . --progress=plain
+	@$(CONTAINER_ENGINE) tag $(IMAGE_NAME):latest $(IMAGE_NAME):$(IMAGE_TAG)
 
 push:
-	@docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest
-	@docker --config=$(DOCKER_CONF) push $(IMAGE_NAME):$(IMAGE_TAG)
-	@docker --config=$(DOCKER_CONF) push $(IMAGE_NAME):latest
+	@$(CONTAINER_ENGINE) --config=$(DOCKER_CONF) push $(IMAGE_NAME):latest
+	@$(CONTAINER_ENGINE) --config=$(DOCKER_CONF) push $(IMAGE_NAME):$(IMAGE_TAG)
