@@ -11,13 +11,11 @@ else
 	DOCKER_CONF := $(HOME)/.docker
 endif
 
-GOOS := $(shell go env GOOS)
-
 gotest:
-	CGO_ENABLED=0 GOOS=$(GOOS) go test ./...
+	CGO_ENABLED=0 GOOS=$(shell go env GOOS) go test ./...
 
 gobuild: gotest
-	CGO_ENABLED=0 GOOS=$(GOOS) go build -o signalfx-prometheus-exporter -a -installsuffix cgo main.go
+	CGO_ENABLED=0 GOOS=$(shell go env GOOS) go build -o signalfx-prometheus-exporter -a -installsuffix cgo main.go
 
 build:
 	@DOCKER_BUILDKIT=1 $(CONTAINER_ENGINE) build --no-cache -t $(IMAGE_NAME):latest . --progress=plain
