@@ -19,6 +19,11 @@ type PrometheusMetric struct {
 	labelTemplates map[string]template.Template
 }
 
+type NameTemplateVars struct {
+	SignalFxMetricName string
+	SignalFxLabels     map[string]string
+}
+
 func (pm *PrometheusMetric) Validate() error {
 	// name template
 	name := pm.Name
@@ -45,13 +50,13 @@ func (pm *PrometheusMetric) Validate() error {
 	return nil
 }
 
-func (pm *PrometheusMetric) GetMetricName(data interface{}) (string, error) {
+func (pm *PrometheusMetric) GetMetricName(data NameTemplateVars) (string, error) {
 	var buffer bytes.Buffer
 	err := pm.nameTemplate.Execute(&buffer, data)
 	return buffer.String(), err
 }
 
-func (pm *PrometheusMetric) GetLabelValue(labelName string, data interface{}) (string, error) {
+func (pm *PrometheusMetric) GetLabelValue(labelName string, data NameTemplateVars) (string, error) {
 	tmpl, ok := pm.labelTemplates[labelName]
 	if !ok {
 		return "", fmt.Errorf("Could not find label named %s", labelName)

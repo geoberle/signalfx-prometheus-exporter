@@ -191,16 +191,13 @@ func buildPrometheusMetadata(metric config.PrometheusMetric, sfxMeta *messages.M
 	// data for template rendering
 	safeMetricName := strings.ReplaceAll(sfxMeta.OriginatingMetric, ".", "_")
 	safeMetricName = strings.ReplaceAll(safeMetricName, ":", "_")
-	tmplRenderingVars := struct {
-		SignalFxMetricName string
-		SignalFxLabels     map[string]string
-	}{
+	templateVars := config.NameTemplateVars{
 		SignalFxMetricName: safeMetricName,
 		SignalFxLabels:     sfxMeta.CustomProperties,
 	}
 
 	// build name
-	name, err := metric.GetMetricName(tmplRenderingVars)
+	name, err := metric.GetMetricName(templateVars)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -211,7 +208,7 @@ func buildPrometheusMetadata(metric config.PrometheusMetric, sfxMeta *messages.M
 	var i = 0
 	for name := range metric.Labels {
 		labelNames[i] = name
-		value, err := metric.GetLabelValue(name, tmplRenderingVars)
+		value, err := metric.GetLabelValue(name, templateVars)
 		if err != nil {
 			return "", nil, nil, err
 		}
