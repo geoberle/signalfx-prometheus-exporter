@@ -1,6 +1,7 @@
-# SignalFX Prometheus exporter
+![build](https://ci.ext.devshift.net/buildStatus/icon?job=app-sre-signalfx-prometheus-exporter-gh-build-main)
+![license](https://img.shields.io/github/license/app-sre/signalfx-prometheus-exporter.svg?style=flat)
 
-[![Build Status](https://github.com/geoberle/signalfx-prometheus-exporter/actions/workflows/docker-image.yml/badge.svg)](https://github.com/geoberle/signalfx-prometheus-exporter/actions/workflows/docker-image.yml)
+# SignalFX Prometheus exporter
 
 SignalFX Prometheus exporter provides a Prometheus scrape target for SignalFX metrics.
 
