@@ -79,6 +79,8 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 
 	// start probe server
 	mux := mux.NewRouter()
+	mux.HandleFunc("/ready", readinessHandler)
+	mux.HandleFunc("/healthy", livenessHandler)
 	mux.HandleFunc("/metrics", metricsHandler)
 	mux.HandleFunc("/probe/{target}", probeHandler)
 	server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
@@ -101,6 +103,14 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 	if err := server.Shutdown(ctxShutDown); err != nil {
 		log.Printf("server Shutdown Failed: %+s\n", err)
 	}
+}
+
+func readinessHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func livenessHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }
 
 func probeHandler(w http.ResponseWriter, r *http.Request) {
