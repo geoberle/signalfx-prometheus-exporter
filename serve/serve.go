@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -33,7 +34,7 @@ var (
 func CollectoAndServe(configFile string, listenPort int, observabilityPort int, ctx context.Context) {
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
-		log.Fatalf("failed to load config: %+s", err)
+		log.Printf("failed to load config: %+s\n", err)
 		return
 	}
 
@@ -43,9 +44,7 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 		fp := cfg.Flows[i]
 		errs.Go(func() error {
 			err := streamData(cfg.Sfx, fp)
-			if err != nil {
-				log.Fatalf("Flow %s failed because of %+s", fp.Name, err)
-			}
+			log.Printf("Flow %s failed because of %+s\n", fp.Name, err)
 			return err
 		})
 	}
@@ -85,7 +84,7 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 
 	<-ctx.Done()
 
-	log.Printf("Server stopped")
+	log.Printf("Server stopped\n")
 
 	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -93,7 +92,7 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 	}()
 
 	if err := server.Shutdown(ctxShutDown); err != nil {
-		log.Fatalf("server Shutdown Failed:%+s", err)
+		log.Printf("server Shutdown Failed: %+s\n", err)
 	}
 }
 
@@ -183,7 +182,15 @@ func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
 			}
 		}
 	}
+
+	/* signalflow programs without stop timestamp should run forever. if the
+	above loop exists, it implies that the program exited. if comp.Err() is
+	not set, we have to assume an unknown error */
 	err = comp.Err()
+	if err == nil {
+		err = errors.New("flow failed for an unknown reason")
+	}
+	client.Close()
 	return err
 }
 
