@@ -64,6 +64,17 @@ The `:9091/metrics` endpoint of SignalFX Prometheus exporter yields all metrics 
 
 The `:9091/probe/$label?target=$value` endpoint can be used to filter metrics based on a Prometheus  `$label` with value `$value`, e.g. `http://localhost:9091/probe/instance?target=my_instance`
 
+## Observability
+Obersvability metrics for flow programs and the go runtime are available on observability endpoint `:9090/metrics`.
+
+| Metric name| Metric type | Labels |
+| ---------- | ----------- | ------ |
+| sfxpe_flow_metrics_received_total | Counter | `flow`=&lt;flow program name&gt; <br> `stream`=&lt;stream name&gt; |
+| sfxpe_flow_metrics_failed_total | Counter | `flow`=&lt;flow program name&gt; <br> `stream`=&lt;stream name&gt; |
+| sfxpe_flow_last_received_seconds | Gauge | `flow`=&lt;flow program name&gt; <br> `stream`=&lt;stream name&gt; |
+
+An article that goes into details about the exposed go runtime metrics can be found [here](https://povilasv.me/prometheus-go-metrics/).
+
 ## Known issues
 - no data during warmup phase
 - verify query - publish() must exists at least once

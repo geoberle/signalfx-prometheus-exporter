@@ -22,13 +22,15 @@ import (
 
 var (
 	// sfx metrics state
-	sfxRegistry = prometheus.NewRegistry()
-	sfxCounters = make(map[string]*prometheus.CounterVec)
-	sfxGauges   = make(map[string]*prometheus.GaugeVec)
+	sfxRegistry               = prometheus.NewRegistry()
+	sfxCounters               = make(map[string]*prometheus.CounterVec)
+	sfxGauges                 = make(map[string]*prometheus.GaugeVec)
+	lastMetricInFlowTimestamp = make(map[string]time.Time)
 
 	// self observability
 	flowMetricsReceived *prometheus.CounterVec
 	flowMetricsFailed   *prometheus.CounterVec
+	flowLastReceived    *prometheus.GaugeVec
 )
 
 func CollectoAndServe(configFile string, listenPort int, observabilityPort int, ctx context.Context) {
@@ -55,11 +57,16 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 		Help: "Number of received metrics",
 	}, []string{"flow", "stream"})
 	flowMetricsFailed = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "sfxpe_flow_metrics_failed",
+		Name: "sfxpe_flow_metrics_failed_total",
 		Help: "Number of metrics that failed do process",
+	}, []string{"flow", "stream"})
+	flowLastReceived = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "sfxpe_flow_last_received_seconds",
+		Help: "Timestamp where the last metric was received",
 	}, []string{"flow", "stream"})
 	prometheus.MustRegister(flowMetricsReceived)
 	prometheus.MustRegister(flowMetricsFailed)
+	prometheus.MustRegister(flowLastReceived)
 	obsMux := mux.NewRouter()
 	obsMux.Handle("/metrics", promhttp.Handler())
 	obsServer := &http.Server{Addr: fmt.Sprintf(":%v", observabilityPort), Handler: obsMux}
@@ -130,6 +137,13 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
+	// initialize flow metrics
+	for _, mt := range fp.MetricTemplates {
+		flowMetricsReceived.WithLabelValues(fp.Name, mt.Stream)
+		flowMetricsFailed.WithLabelValues(fp.Name, mt.Stream)
+		flowMetricsFailed.WithLabelValues(fp.Name, mt.Stream)
+	}
+
 	client, err := signalflow.NewClient(
 		signalflow.StreamURLForRealm(sfx.Realm),
 		signalflow.AccessToken(sfx.Token),
@@ -156,6 +170,7 @@ func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
 				stream = "default"
 			}
 			flowMetricsReceived.WithLabelValues(fp.Name, stream).Inc()
+			flowLastReceived.WithLabelValues(fp.Name, stream).SetToCurrentTime()
 			mt, err := fp.GetMetricTemplateForStream(stream)
 			if err != nil {
 				// todo log
