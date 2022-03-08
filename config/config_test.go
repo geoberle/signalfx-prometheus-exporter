@@ -45,3 +45,26 @@ func TestGetLabelValue(t *testing.T) {
 	assert.Equal(t, "test", x)
 
 }
+
+func TestMinMetricsNotAUInt(t *testing.T) {
+	configFile := `---
+sfx:
+token: xxx
+flows:
+- name: catchpoint-data
+  query: |
+    data('catchpoint.counterfailedrequests').publish()
+    data('catchpoint.counterrequests').publish()
+  prometheusMetricTemplates:
+  - type: counter
+  labels:
+    instance: '{{ .SignalFxLabels.cp_testname }}'
+grouping:
+- label: instance
+  groupReadyCondition:
+    minMetrics: -1
+`
+	_, err := config.LoadConfigFromBytes([]byte(configFile))
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "`-1` into uint")
+}

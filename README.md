@@ -59,10 +59,41 @@ Since the data delivery mechanism from SignalFX is a stream of metrics, the proc
 
 ![architecture](docs/arch.png)
 
-## Blackbox-exporter compatibility
-The `:9091/metrics` endpoint of SignalFX Prometheus exporter yields all metrics that have been processed by SignalFlow programs so far. But the exporter can also be used in a blackbox-exporter compatible way, returning only a set of metrics belonging to a certain scrape target. For blackbox-exporter, a scrape target resembles some resource on the network. For SignalFX Prometheus exporter a scrape target is a way to filter on metric labels. As long as metrics with a common label belong to the same logical unit, such filtering can be used to simulate blackbox-exporter behaviour for target scraping.
+## Scraping metric groups
 
-The `:9091/probe/$label?target=$value` endpoint can be used to filter metrics based on a Prometheus  `$label` with value `$value`, e.g. `http://localhost:9091/probe/instance?target=my_instance`
+Metrics can also be scraped based on a metric label. This can be enabled by providing
+grouping [configuration](docs/configuration.md).
+
+Once configured, the endpoint for a group scrape looks like `:9091/probe/$label?target=$value` and returns only metrics with the `$label` set to `$value`.
+
+The async metric delivery mode of SignalFX makes it necessary to handle situations
+where metrics are yet missing (e.g. cold cache on process startup). The
+`grouping.groupReadyConditions` config section provides options to declare the behaviour
+for such situations, failing a scrape on the `/metric/$label` endpoint when
+the conditions are not satisfied. This will result in the default metric `up`
+on the scraper side to highlight that metrics could not be aquired. Depending
+on the situation, this behaviour might be better than scraping incomplete
+metrics. Right now, the `minMetrics` condition is supported, failing a scrape
+when less than `minMetrics` metrics would be exposed.
+
+The `target` parameter to supply a filter for the label makes this scrape
+endpoint compatible with the [`Probe`](https://prometheus-operator.dev/docs/operator/design/#probe)
+CRD from the Prometheus operator.
+
+### Example
+
+The following example enables filtering based on the `instance` label of metrics. A filtered
+scrape on this label can be done via the `:9091/metrics/instance?target=value` endpoint,
+where the `target` query parameter supplies the value to filter on. Additionally, the scrape
+will fail when less than 2 metrics are left after filtering.
+
+```yaml
+grouping:
+- label: instance
+  groupReadyCondition:
+    minMetrics: 2
+```
+
 
 ## Observability
 Obersvability metrics for flow programs and the go runtime are available on observability endpoint `:9090/metrics`.
@@ -76,5 +107,4 @@ Obersvability metrics for flow programs and the go runtime are available on obse
 An article that goes into details about the exposed go runtime metrics can be found [here](https://povilasv.me/prometheus-go-metrics/).
 
 ## Known issues
-- no data during warmup phase
 - verify query - publish() must exists at least once

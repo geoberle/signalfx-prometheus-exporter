@@ -5,6 +5,7 @@ The configuration file is written in YAML format and adheres to the schema descr
 Generic placeholders are defined as follows:
 
 * `<string>`: a regular string
+* `<int>`: an integer
 * `<prometheus-label>`: a string following the prometheus label regex `[a-zA-Z_][a-zA-Z0-9_]*`
 * `<go-template>`: a string that contains a go-template
 
@@ -21,6 +22,10 @@ The variables usable in go templates are described in the [SignalFlow primer](si
   # The list of metric flows from SignalFX to process into Prometheus metrics
   flows:
     [ - <flow>, ... ]
+
+  # Optional configuration for scraping based on labels
+  grouping:
+    [ - <grouping>, ...]
 ```
 
 ### Flow
@@ -57,4 +62,16 @@ A Prometheus metric translates a SignalFX metric into a Prometheus metric.
   # Labels for the Prometheus metric
   labels:
     [ <prometheus-label>: <go-template>, ... ]
+```
+
+### Grouping
+Grouping configuration enables scraping metrics based on labels.
+
+```yml
+  # The label that can be used for grouped scrapes
+  label: <prometheus-label>
+  # Conditions that will fail the group scrape when they are not true
+  [ groupReadyConditions: ]
+    # Minimum number of metrics within a group to let the scrape succeed
+    minMetrics: <int>
 ```

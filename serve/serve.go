@@ -51,7 +51,7 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 		})
 	}
 
-	// start observability server
+	// configure and start observability server
 	flowMetricsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "sfxpe_flow_metrics_received_total",
 		Help: "Number of received metrics",
@@ -77,12 +77,16 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 	}()
 	log.Printf("Observability server listening on port %v\n", observabilityPort)
 
-	// start probe server
+	// configure and start scrape server
 	mux := mux.NewRouter()
 	mux.HandleFunc("/ready", readinessHandler)
 	mux.HandleFunc("/healthy", livenessHandler)
 	mux.HandleFunc("/metrics", metricsHandler)
-	mux.HandleFunc("/probe/{target}", probeHandler)
+	for _, g := range cfg.Groupings {
+		mux.HandleFunc(fmt.Sprintf("/metrics/%s", g.Label), func(rw http.ResponseWriter, r *http.Request) {
+			probeHandler(g, rw, r)
+		})
+	}
 	server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -113,28 +117,25 @@ func livenessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func probeHandler(w http.ResponseWriter, r *http.Request) {
+func probeHandler(grouping config.Grouping, w http.ResponseWriter, r *http.Request) {
 	// blackbox exporter compatible scrape handler
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(5*float64(time.Second)))
 	defer cancel()
 	r = r.WithContext(ctx)
 
-	vars := mux.Vars(r)
-	targetLabel, ok := vars["target"]
-	if ok && targetLabel != "" {
-		targetValue, ok := r.URL.Query()["target"]
-		if ok && len(targetValue) > 0 {
-			metricGatherer := &FilteringRegistry{
-				Registry:    sfxRegistry,
-				FilterLabel: targetLabel,
-				FilterValue: targetValue[0],
-			}
-			h := promhttp.HandlerFor(metricGatherer, promhttp.HandlerOpts{})
-			h.ServeHTTP(w, r)
-			return
+	targetValue, ok := r.URL.Query()["target"]
+	if ok && len(targetValue) > 0 {
+		metricGatherer := &FilteringRegistry{
+			Registry:    sfxRegistry,
+			Grouping:    grouping,
+			FilterValue: targetValue[0],
 		}
+		h := promhttp.HandlerFor(metricGatherer, promhttp.HandlerOpts{})
+		h.ServeHTTP(w, r)
+		return
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
 	}
-	w.WriteHeader(http.StatusBadRequest)
 }
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +147,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-func streamData(sfx config.SignalFxConfig, fp config.FlowProgram) error {
+func streamData(sfx config.Sfx, fp config.FlowProgram) error {
 	// initialize flow metrics
 	for _, mt := range fp.MetricTemplates {
 		flowMetricsReceived.WithLabelValues(fp.Name, mt.Stream)

@@ -1,0 +1,15 @@
+sfx:
+  token: xxx
+flows:
+- name: catchpoint-data
+  query: |
+    data('catchpoint.counterfailedrequests').publish()
+    data('catchpoint.counterrequests').publish()
+  prometheusMetricTemplates:
+  - type: counter
+    labels:
+      instance: '{{ .SignalFxLabels.cp_testname }}'
+grouping:
+- label: instance
+  groupReadyCondition:
+    minMetrics: 2

@@ -10,6 +10,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type GroupReadyCondition struct {
+	MinMetrics uint `yaml:"minMetrics"`
+}
+
+type Grouping struct {
+	Label               string
+	GroupReadyCondition GroupReadyCondition `yaml:"groupReadyCondition"`
+}
+
 type PrometheusMetric struct {
 	Name           string            `yaml:"name"`
 	Stream         string            `yaml:"stream"`
@@ -102,12 +111,12 @@ func (fp *FlowProgram) Validate() error {
 	return nil
 }
 
-type SignalFxConfig struct {
+type Sfx struct {
 	Realm string `yaml:"realm"`
 	Token string `yaml:"token"`
 }
 
-func (sfx *SignalFxConfig) Validate() error {
+func (sfx *Sfx) Validate() error {
 	if sfx.Realm == "" {
 		sfx.Realm = "us1"
 	}
@@ -115,8 +124,9 @@ func (sfx *SignalFxConfig) Validate() error {
 }
 
 type Config struct {
-	Sfx   SignalFxConfig `yaml:"sfx"`
-	Flows []FlowProgram  `yaml:"flows"`
+	Sfx       Sfx           `yaml:"sfx"`
+	Flows     []FlowProgram `yaml:"flows"`
+	Groupings []Grouping    `yaml:"grouping"`
 }
 
 func (c *Config) Validate() error {
@@ -132,20 +142,23 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-func LoadConfig(file string) (*Config, error) {
-	yamlFile, err := ioutil.ReadFile(file)
-	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
-		return nil, err
-	}
-
+func LoadConfigFromBytes(configBytes []byte) (*Config, error) {
 	var cfg Config
-	err = yaml.Unmarshal(yamlFile, &cfg)
+	err := yaml.Unmarshal(configBytes, &cfg)
 	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
+		log.Printf("Unmarshal: %v\n", err)
 		return nil, err
 	}
 
 	cfg.Validate()
 	return &cfg, nil
+}
+
+func LoadConfig(file string) (*Config, error) {
+	configBytes, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Printf("yamlFile.Get err   #%v ", err)
+		return nil, err
+	}
+	return LoadConfigFromBytes(configBytes)
 }
