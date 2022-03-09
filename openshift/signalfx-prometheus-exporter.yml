@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: signalfx-prometheus-exporter
+objects:
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: signalfx-prometheus-exporter
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: signalfx-prometheus-exporter
+    namespace: app-sre-observability-stage
+  spec:
+    replicas: ${{REPLICAS}}
+    selector:
+      matchLabels:
+        app: signalfx-prometheus-exporter
+    strategy:
+      rollingUpdate:
+        maxSurge: 0
+        maxUnavailable: 1
+      type: RollingUpdate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: signalfx-prometheus-exporter
+      spec:
+        serviceAccountName: signalfx-prometheus-exporter
+        containers:
+        - image: ${IMAGE}:${IMAGE_TAG}
+          name: signalfx-prometheus-exporter
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 9090
+            name: observability
+            protocol: TCP
+          - containerPort: 9091
+            name: app
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            periodSeconds: 10
+            successThreshold: 1
+            httpGet:
+              path: /ready
+              port: app
+            timeoutSeconds: 1
+          livenessProbe:
+            failureThreshold: 3
+            periodSeconds: 10
+            successThreshold: 1
+            httpGet:
+              path: /healthy
+              port: app
+            timeoutSeconds: 1
+          resources:
+            limits:
+              memory: ${MEMORY_LIMIT}
+              cpu: ${CPU_LIMIT}
+            requests:
+              memory: ${MEMORY_REQUESTS}
+              cpu: ${CPU_REQUESTS}
+          volumeMounts:
+          - mountPath: /config
+            name: signalfx-exporter-config
+            readOnly: true
+        restartPolicy: Always
+        volumes:
+        - name: signalfx-exporter-config
+          secret:
+            secretName: signalfx-exporter-config
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - signalfx-prometheus-exporter
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: signalfx-prometheus-exporter
+    labels:
+      app: signalfx-prometheus-exporter
+  spec:
+    ports:
+      - name: observability
+        protocol: TCP
+        port: 9090
+        targetPort: 9090
+      - name: app
+        protocol: TCP
+        port: 9091
+        targetPort: 9091
+    sessionAffinity: None
+    type: ClusterIP
+    selector:
+      app: signalfx-prometheus-exporter
+
+parameters:
+- name: IMAGE
+  value: quay.io/app-sre/signalfx-prometheus-exporter
+- name: IMAGE_TAG
+  value: latest
+- name: OPERATOR_REPLICAS
+  value: "3"
+- name: CPU_REQUESTS
+  value: 25m
+- name: CPU_LIMIT
+  value: 100m
+- name: MEMORY_REQUESTS
+  value: 200Mi
+- name: MEMORY_LIMIT
+  value: 200Mi
