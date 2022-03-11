@@ -8,6 +8,7 @@ Generic placeholders are defined as follows:
 * `<int>`: an integer
 * `<prometheus-label>`: a string following the prometheus label regex `[a-zA-Z_][a-zA-Z0-9_]*`
 * `<go-template>`: a string that contains a go-template
+* `<duration-string>`: decimal numbers, each with optional fraction and a unit suffix (s, m, h), e.g. 60s
 
 The variables usable in go templates are described in the [SignalFlow primer](signalflow.md).
 
@@ -36,6 +37,10 @@ A flow describes how metrics are queried from SignalFX and processed into Promet
 
   # The SignalFlow program to query data from SignalFX
   query: <string>
+
+  # The amount of historical data that will be received when a flow program starts.
+  # Can be used to get data quicker for scraping.
+  [ historicalData: <duration-string> | default = 0 ]
 
   # A collection of templates to turn SignalFlow query results into Prometheus metrics
   prometheusMetricTemplate:

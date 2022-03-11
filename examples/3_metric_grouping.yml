@@ -2,6 +2,7 @@ sfx:
   token: xxx
 flows:
 - name: catchpoint-data
+  historicalData: 60s
   query: |
     data('catchpoint.counterfailedrequests').publish()
     data('catchpoint.counterrequests').publish()
