@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	OtherLabel  = "other_label"
 	FilterLabel = "label"
 	FilterValue = "value"
 )
@@ -31,6 +32,35 @@ func setupRegistry(minMetrics uint) (*serve.FilteringRegistry, *prometheus.Regis
 	}
 
 	return fr, registry
+}
+
+func TestFilterGroup(t *testing.T) {
+	/*  test only values are return that match the filter */
+	fr, registry := setupRegistry(0)
+
+	gauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Name: "some_gauge"},
+		[]string{FilterLabel},
+	)
+	registry.MustRegister(gauge)
+	gauge.WithLabelValues(FilterValue).Set(10)
+	gauge.WithLabelValues("other_value").Set(11)
+
+	metricFamilies, err := fr.Gather()
+	assert.Nil(t, err)
+	assert.NotNil(t, metricFamilies)
+	assert.NotEmpty(t, metricFamilies)
+
+	metricCounter := 0
+	for _, mf := range metricFamilies {
+		for _, m := range mf.Metric {
+			label := m.GetLabel()[0]
+			assert.Equal(t, *label.Name, FilterLabel)
+			assert.Equal(t, *label.Value, FilterValue)
+			metricCounter++
+		}
+	}
+	assert.Equal(t, metricCounter, 1)
 }
 
 func TestMinimumMetricsSupplied(t *testing.T) {
