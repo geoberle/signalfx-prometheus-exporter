@@ -3,6 +3,7 @@ package config_test
 import (
 	"signalfx-prometheus-exporter/config"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -67,4 +68,27 @@ grouping:
 	_, err := config.LoadConfigFromBytes([]byte(configFile))
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "`-1` into uint")
+}
+
+func TestMinHistoricalData(t *testing.T) {
+	configFile := `---
+sfx:
+token: xxx
+flows:
+- name: catchpoint-data
+  historicalData: 99s
+  query: |
+    data('catchpoint.counterfailedrequests').publish()
+    data('catchpoint.counterrequests').publish()
+  prometheusMetricTemplates:
+  - type: counter
+  labels:
+    instance: '{{ .SignalFxLabels.cp_testname }}'
+`
+	cfg, err := config.LoadConfigFromBytes([]byte(configFile))
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+
+	ninty_nine, _ := time.ParseDuration("99s")
+	assert.Equal(t, cfg.Flows[0].HistoricalData, ninty_nine)
 }

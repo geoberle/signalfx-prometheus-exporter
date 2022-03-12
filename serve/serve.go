@@ -165,6 +165,7 @@ func streamData(sfx config.Sfx, fp config.FlowProgram) error {
 
 	comp, err := client.Execute(&signalflow.ExecuteRequest{
 		Program: fp.Query,
+		Start:   time.Now().Add(fp.HistoricalData * -1),
 	})
 	if err != nil {
 		return fmt.Errorf("SignalFlow program for %s is invalid - %+s", fp.Name, err)

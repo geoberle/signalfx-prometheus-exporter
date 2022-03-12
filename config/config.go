@@ -6,8 +6,9 @@ import (
 	"io/ioutil"
 	"log"
 	"text/template"
+	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type GroupReadyCondition struct {
@@ -78,6 +79,7 @@ func (pm *PrometheusMetric) GetLabelValue(labelName string, data NameTemplateVar
 type FlowProgram struct {
 	Name              string             `yaml:"name"`
 	Query             string             `yaml:"query"`
+	HistoricalData    time.Duration      `yaml:"historicalData"`
 	MetricTemplates   []PrometheusMetric `yaml:"prometheusMetricTemplates"`
 	templatesByStream map[string]PrometheusMetric
 }
