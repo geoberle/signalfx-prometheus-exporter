@@ -33,24 +33,7 @@ var (
 	flowLastReceived    *prometheus.GaugeVec
 )
 
-func CollectoAndServe(configFile string, listenPort int, observabilityPort int, ctx context.Context) {
-	cfg, err := config.LoadConfig(configFile)
-	if err != nil {
-		log.Printf("failed to load config: %+s\n", err)
-		return
-	}
-
-	// start streaming data from signalfx
-	errs, ctx := errgroup.WithContext(ctx)
-	for i := range cfg.Flows {
-		fp := cfg.Flows[i]
-		errs.Go(func() error {
-			err := streamData(cfg.Sfx, fp)
-			log.Printf("Flow %s failed because of %+s\n", fp.Name, err)
-			return err
-		})
-	}
-
+func setupObservability(observabilityPort int) {
 	// configure and start observability server
 	flowMetricsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "sfxpe_flow_metrics_received_total",
@@ -76,7 +59,22 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 		}
 	}()
 	log.Printf("Observability server listening on port %v\n", observabilityPort)
+}
 
+func setupMetricStreaming(cfg *config.Config, ctx context.Context) context.Context {
+	errs, ctx := errgroup.WithContext(ctx)
+	for i := range cfg.Flows {
+		fp := cfg.Flows[i]
+		errs.Go(func() error {
+			err := streamData(cfg.Sfx, fp)
+			log.Printf("Flow %s failed because of %+s\n", fp.Name, err)
+			return err
+		})
+	}
+	return ctx
+}
+
+func serve(cfg *config.Config, listenPort int, ctx context.Context) {
 	// configure and start scrape server
 	mux := mux.NewRouter()
 	mux.HandleFunc("/ready", readinessHandler)
@@ -107,6 +105,17 @@ func CollectoAndServe(configFile string, listenPort int, observabilityPort int, 
 	if err := server.Shutdown(ctxShutDown); err != nil {
 		log.Printf("server Shutdown Failed: %+s\n", err)
 	}
+}
+
+func CollectoAndServe(configFile string, listenPort int, observabilityPort int, ctx context.Context) {
+	cfg, err := config.LoadConfig(configFile)
+	if err != nil {
+		log.Printf("failed to load config: %+s\n", err)
+		return
+	}
+	setupObservability(observabilityPort)
+	ctx = setupMetricStreaming(cfg, ctx)
+	serve(cfg, listenPort, ctx)
 }
 
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
