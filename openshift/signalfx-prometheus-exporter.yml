@@ -11,6 +11,8 @@ objects:
   kind: Deployment
   metadata:
     name: signalfx-prometheus-exporter
+    labels:
+      app: signalfx-prometheus-exporter
   spec:
     replicas: ${{REPLICAS}}
     selector:
