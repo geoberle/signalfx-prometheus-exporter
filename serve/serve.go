@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"signalfx-prometheus-exporter/config"
+	. "signalfx-prometheus-exporter/utils"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -55,10 +55,10 @@ func setupObservability(observabilityPort int) {
 	obsServer := &http.Server{Addr: fmt.Sprintf(":%v", observabilityPort), Handler: obsMux}
 	go func() {
 		if err := obsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("observability server failure: %+s\n", err)
+			Log().Fatalf("observability server failure: %+s", err)
 		}
 	}()
-	log.Printf("Observability server listening on port %v\n", observabilityPort)
+	Log().Infof("Observability server listening on port %v", observabilityPort)
 }
 
 func setupMetricStreaming(cfg *config.Config, ctx context.Context) context.Context {
@@ -67,7 +67,7 @@ func setupMetricStreaming(cfg *config.Config, ctx context.Context) context.Conte
 		fp := cfg.Flows[i]
 		errs.Go(func() error {
 			err := streamData(cfg.Sfx, fp)
-			log.Printf("Flow %s failed because of %+s\n", fp.Name, err)
+			Log().Errorf("Flow %s failed because of %+s", fp.Name, err)
 			return err
 		})
 	}
@@ -88,14 +88,14 @@ func serve(cfg *config.Config, listenPort int, ctx context.Context) {
 	server := &http.Server{Addr: fmt.Sprintf(":%v", listenPort), Handler: mux}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("metrics server failure: %+s\n", err)
+			Log().Fatalf("metrics server failure: %+s", err)
 		}
 	}()
-	log.Printf("Scrape server listening on port %v\n", listenPort)
+	Log().Info("Scrape server listening on port %v", listenPort)
 
 	<-ctx.Done()
 
-	log.Printf("Server stopped\n")
+	Log().Info("Server stopped")
 
 	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -103,14 +103,14 @@ func serve(cfg *config.Config, listenPort int, ctx context.Context) {
 	}()
 
 	if err := server.Shutdown(ctxShutDown); err != nil {
-		log.Printf("server Shutdown Failed: %+s\n", err)
+		Log().Errorf("server Shutdown Failed: %+s", err)
 	}
 }
 
 func CollectoAndServe(configFile string, listenPort int, observabilityPort int, ctx context.Context) {
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
-		log.Printf("failed to load config: %+s\n", err)
+		Log().Errorf("failed to load config: %+s", err)
 		return
 	}
 	setupObservability(observabilityPort)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"text/template"
 	"time"
 
@@ -148,7 +147,6 @@ func LoadConfigFromBytes(configBytes []byte) (*Config, error) {
 	var cfg Config
 	err := yaml.Unmarshal(configBytes, &cfg)
 	if err != nil {
-		log.Printf("Unmarshal: %v\n", err)
 		return nil, err
 	}
 
@@ -159,7 +157,6 @@ func LoadConfigFromBytes(configBytes []byte) (*Config, error) {
 func LoadConfig(file string) (*Config, error) {
 	configBytes, err := ioutil.ReadFile(file)
 	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
 		return nil, err
 	}
 	return LoadConfigFromBytes(configBytes)
