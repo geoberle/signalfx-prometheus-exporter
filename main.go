@@ -16,10 +16,10 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"signalfx-prometheus-exporter/cmd"
+	. "signalfx-prometheus-exporter/utils"
 	"syscall"
 )
 
@@ -32,7 +32,7 @@ func main() {
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigs
-		log.Printf("Abort signal received ...")
+		Log().Infof("Abort signal received ...")
 		cancel()
 	}()
 
